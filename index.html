@@ -1,0 +1,185 @@
+import time
+from flask import Flask, render_template_string, abort, request, make_response
+
+app = Flask(__name__)
+
+# --- نظام حماية بسيط ضد التخمين والطلبات المتكررة السريعة (Rate Limiter) ---
+ip_requests = {}
+
+@app.before_request
+def rate_limiter():
+    client_ip = request.remote_addr
+    current_time = time.time()
+    
+    if client_ip in ip_requests:
+        last_request_time = ip_requests[client_ip]
+        # إذا كان الفارق بين الطلب والآخر أقل من 0.5 ثانية، يتم حظر الطلب مؤقتاً
+        if current_time - last_request_time < 0.5:
+            return abort(429, description="طلب سريع جداً! تم حظرك مؤقتاً لحماية الموقع من التخمين.")
+            
+    ip_requests[client_ip] = current_time
+
+# --- إضافة رؤوس أمان لحماية المتصفح من الاختراق والغش ---
+@app.after_request
+def add_security_headers(response):
+    # لمنع تضمين الموقع داخل iFrame (حماية ضد Clickjacking)
+    response.headers['X-Frame-Options'] = 'DENY'
+    # لمنع المتصفح من تخمين نوع الملفات (حماية ضد Content Sniffing)
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    # تفعيل حماية المتصفح ضد حاقني الأكواد XSS
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    return response
+
+# --- التصميم والأكواد (HTML + CSS + JS) في ملف واحد ---
+HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>آية الكرسي الإلكترونية</title>
+    
+    <!-- الـ CSS المدمج لتصميم الأيقونة الدائرية والخلفية -->
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e1e2f, #0f0f1a);
+            color: #ffffff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .container {
+            text-align: center;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            backdrop-filter: blur(8px);
+            border: 1px rgba(255, 255, 255, 0.1) solid;
+            max-width: 400px;
+            width: 90%;
+        }
+        h1 {
+            font-size: 24px;
+            margin-bottom: 30px;
+            color: #4ed9a8;
+        }
+        /* الأيقونة الدائرية القوية الشغالة بالصوت */
+        .audio-button {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: linear-gradient(145deg, #23c48e, #1ca275);
+            border: none;
+            cursor: pointer;
+            outline: none;
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 10px 25px rgba(28, 162, 117, 0.4), 
+                        inset 0 -4px 8px rgba(0,0,0,0.2), 
+                        inset 0 4px 8px rgba(255,255,255,0.3);
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        .audio-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 15px 30px rgba(28, 162, 117, 0.6);
+        }
+        .audio-button:active {
+            transform: scale(0.95);
+        }
+        /* شكل رمز التشغيل (المثلث) بالداخل */
+        .play-icon {
+            width: 0;
+            height: 0;
+            border-top: 15px solid transparent;
+            border-bottom: 15px solid transparent;
+            border-left: 25px solid white;
+            margin-left: 8px;
+            transition: all 0.2s ease;
+        }
+        /* تحويل الأيقونة لرمز إيقاف عند التشغيل */
+        .playing .play-icon {
+            border: none;
+            width: 20px;
+            height: 25px;
+            background-color: white;
+            margin-left: 0;
+            position: relative;
+            box-shadow: -8px 0 0 white, 8px 0 0 white; /* خطين متوازيين للإيقاف */
+            background-clip: padding-box;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+        }
+        .status-text {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #b3b3b3;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>استماع إلى آية الكرسي</h1>
+        
+        <!-- الأيقونة الدائرية القوية للتشغيل -->
+        <button class="audio-button" id="playBtn" onclick="toggleAudio()">
+            <div class="play-icon" id="icon"></div>
+        </button>
+        
+        <div class="status-text" id="status">اضغط على الأيقونة للتشغيل</div>
+    </div>
+
+    <!-- الجافا سكريبت لتشغيل الصوت والتحكم بالأيقونة -->
+    <script>
+        // رابط صوتي مباشر وموثوق لآية الكرسي (بصوت الشيخ مشاري العفاسي)
+        const audioUrl = "https://server8.mp3quran.net/afs/002255.mp3";
+        const audio = new Audio(audioUrl);
+        const playBtn = document.getElementById('playBtn');
+        const statusText = document.getElementById('status');
+
+        function toggleAudio() {
+            if (audio.paused) {
+                audio.play()
+                .then(() => {
+                    playBtn.classList.add('playing');
+                    statusText.innerText = "جاري التشغيل الآن...";
+                })
+                .catch(error => {
+                    statusText.innerText = "خطأ في الاتصال بالإنترنت لتشغيل الصوت.";
+                    console.error("Audio error:", error);
+                });
+            } else {
+                audio.pause();
+                playBtn.classList.remove('playing');
+                statusText.innerText = "تم الإيقاف المؤقت";
+            }
+        }
+
+        // إرجاع شكل الأيقونة لطبيعتها تلقائياً عند انتهاء الآية
+        audio.onended = function() {
+            playBtn.classList.remove('playing');
+            statusText.innerText = "اضغط على الأيقونة لإعادة التشغيل";
+        };
+    </script>
+</body>
+</html>
+"""
+
+@app.route('/')
+def index():
+    return render_template_string(HTML_TEMPLATE)
+
+if __name__ == '__main__':
+    # تشغيل السيرفر محلياً على البورت 5000
+    app.run(host='0.0.0.0', port=5000, debug=False)
