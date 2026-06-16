@@ -1,0 +1,497 @@
+# -*- coding: utf-8 -*-
+from flask import Flask, render_template_string, make_response
+import secrets
+
+app = Flask(__name__)
+app.secret_key = secrets.token_hex(32)
+
+@app.after_request
+def security_headers(resp):
+    resp.headers['X-Content-Type-Options'] = 'nosniff'
+    resp.headers['X-Frame-Options'] = 'DENY'
+    resp.headers['X-XSS-Protection'] = '1; mode=block'
+    resp.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';"
+    return resp
+
+HTML = """
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>🧠 اختبار العبقرية | 10 مراحل × 10 أسئلة</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', 'Cairo', Tahoma, sans-serif;
+        }
+        body {
+            min-height: 100vh;
+            background: linear-gradient(145deg, #0a0f2a 0%, #0a1a3a 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 1rem;
+        }
+        .game-container {
+            max-width: 850px;
+            width: 100%;
+            background: rgba(255,255,255,0.08);
+            backdrop-filter: blur(4px);
+            border-radius: 2rem;
+            padding: 1.5rem;
+            border: 1px solid rgba(255,215,0,0.3);
+            box-shadow: 0 20px 35px rgba(0,0,0,0.5);
+        }
+        /* شاشة الموافقة */
+        .consent-card {
+            text-align: center;
+            background: rgba(0,0,0,0.75);
+            border-radius: 1.8rem;
+            padding: 2rem 1.2rem;
+        }
+        .consent-title {
+            font-size: 1.9rem;
+            color: #ffd966;
+            margin-bottom: 1rem;
+        }
+        .consent-text {
+            font-size: 1.1rem;
+            color: #f0f0f0;
+            line-height: 1.6;
+            margin: 1rem 0;
+        }
+        .consent-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin-top: 1.8rem;
+            flex-wrap: wrap;
+        }
+        .btn-accept, .btn-decline {
+            padding: 0.7rem 1.8rem;
+            font-size: 1rem;
+            border: none;
+            border-radius: 3rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .btn-accept {
+            background: linear-gradient(95deg, #ff9800, #ff5722);
+            color: white;
+        }
+        .btn-decline {
+            background: #2c3e5e;
+            color: #ddd;
+            border: 1px solid #ffb347;
+        }
+        /* رأس الاختبار */
+        .quiz-header {
+            background: rgba(0,0,0,0.55);
+            border-radius: 1.8rem;
+            padding: 0.8rem 1.2rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 0.8rem;
+        }
+        .level-badge {
+            background: linear-gradient(135deg, #ffb347, #ff8c1a);
+            padding: 0.4rem 1rem;
+            border-radius: 40px;
+            font-weight: bold;
+            font-size: 1rem;
+            color: #1e2a3a;
+        }
+        .question-counter {
+            background: #2c3e66;
+            padding: 0.3rem 1rem;
+            border-radius: 2rem;
+            color: white;
+            font-size: 0.9rem;
+        }
+        .card {
+            background: rgba(10, 20, 40, 0.9);
+            border-radius: 1.8rem;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            border: 1px solid rgba(255,200,100,0.3);
+        }
+        .question-text {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #fff3e0;
+            line-height: 1.4;
+            margin-bottom: 1.3rem;
+            word-break: break-word;
+        }
+        .options-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.7rem;
+        }
+        .option {
+            background: rgba(0,0,0,0.6);
+            border: 1px solid rgba(255,200,100,0.5);
+            border-radius: 60px;
+            padding: 0.7rem 1rem;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            transition: 0.2s;
+            color: #f5f5f5;
+            font-size: 0.95rem;
+        }
+        .option:hover {
+            background: #2a3f66;
+            transform: scale(1.01);
+        }
+        .option.selected {
+            background: #f0a500;
+            color: #0a0f2a;
+            font-weight: bold;
+            border-color: #ffffff;
+            box-shadow: 0 0 6px gold;
+        }
+        .option-letter {
+            font-weight: bold;
+            background: #1f2a44;
+            width: 30px;
+            height: 30px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 30px;
+            margin-left: 12px;
+        }
+        .option.selected .option-letter {
+            background: #fff2cc;
+            color: #b45f06;
+        }
+        .action-buttons {
+            display: flex;
+            gap: 1rem;
+            margin-top: 0.5rem;
+            flex-wrap: wrap;
+        }
+        button {
+            background: #2c3e66;
+            border: none;
+            padding: 0.7rem 1rem;
+            border-radius: 3rem;
+            font-size: 1rem;
+            font-weight: bold;
+            color: white;
+            cursor: pointer;
+            flex: 1;
+        }
+        .next-btn {
+            background: linear-gradient(95deg, #ff9800, #ff5722);
+        }
+        .result-area {
+            text-align: center;
+            background: #010b1ad9;
+            border-radius: 1.8rem;
+            padding: 1.8rem;
+        }
+        .score-percent {
+            font-size: 2.8rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #FFD966, #FFA500);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        footer {
+            font-size: 0.7rem;
+            text-align: center;
+            margin-top: 1.2rem;
+            color: #aaa;
+        }
+        @media (max-width: 550px) {
+            .game-container { padding: 1rem; }
+            .question-text { font-size: 1.1rem; }
+            .option { font-size: 0.85rem; padding: 0.5rem 0.8rem; }
+            .option-letter { width: 26px; height: 26px; margin-left: 8px; }
+            .level-badge { font-size: 0.85rem; }
+        }
+    </style>
+</head>
+<body>
+<div class="game-container" id="app"></div>
+
+<script>
+    // حماية بسيطة (منع أدوات المطور)
+    (function() {
+        document.addEventListener('contextmenu', e => e.preventDefault());
+        document.addEventListener('keydown', e => {
+            if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && e.key === 'I') || (e.ctrlKey && e.key === 'U')) {
+                e.preventDefault();
+                alert('🔒 الوصول مقيد لحماية الاختبار.');
+            }
+        });
+        setInterval(() => {
+            const before = Date.now();
+            debugger;
+            if (Date.now() - before > 100) {
+                document.body.innerHTML = '<div style="color:red;padding:2rem;text-align:center">⚠️ تم اكتشاف محاولة فتح أدوات التطوير.</div>';
+                throw new Error();
+            }
+        }, 3000);
+    })();
+
+    // ========= بناء الأسئلة (100 سؤال كامل) =========
+    const QUESTIONS = [];
+    function add(level, text, opts, correctIdx) {
+        QUESTIONS.push({ level, text, options: opts, correct: correctIdx });
+    }
+
+    // المرحلة 1 (10)
+    add(1, "إذا كان 3 + 4 = 28 ، و 5 + 2 = 310 ، و 6 + 3 = 318 ، فما ناتج 7 + 2 ؟", ["514", "59", "79", "149"], 0);
+    add(1, "ما الرقم الذي يكمل المتسلسلة: 5 , 8 , 13 , 21 , ?", ["30", "32", "34", "28"], 2);
+    add(1, "إذا كان اليوم هو السبت بعد 72 يوم سيكون؟", ["السبت", "الأحد", "الجمعة", "الخميس"], 0);
+    add(1, "أي من الأعداد التالية ليس أولياً؟", ["17", "19", "21", "23"], 2);
+    add(1, "جدي عمره 4 أضعاف حفيده. بعد 20 سنة يصبح عمره ضعف عمر حفيده. كم عمر الحفيد الآن؟", ["10", "15", "20", "12"], 0);
+    add(1, "ما هو الشيء الذي يقرصك ولا تراه؟", ["الجوع", "البرد", "الضوء", "الهواء"], 0);
+    add(1, "كلمة مكونة من 4 حروف، إذا أكلت نصفها تموت، فما هي؟", ["سمسم", "خبز", "سمكة", "حبة"], 0);
+    add(1, "يرى كل شيء بلا عيون، فمن هو؟", ["المرآة", "العقل", "الخيال", "الحلم"], 0);
+    add(1, "ما هو العدد الذي إذا ضربته في نفسه ثم أضفت إليه 5 أصبح الناتج 30؟", ["5", "6", "4", "7"], 0);
+    add(1, "إذا كان عقرب الساعات يشير إلى 3 وعقرب الدقائق إلى 12، كم الزاوية بينهما؟", ["90°", "80°", "100°", "75°"], 0);
+    // المرحلة 2
+    add(2, "كم عدد المربعات في رقعة الشطرنج (8×8)؟", ["64", "204", "128", "256"], 1);
+    add(2, "جذر 144 × جذر 64 = ؟", ["96", "86", "72", "108"], 0);
+    add(2, "إذا كانت س + ص = 12 و س - ص = 4 ، فما قيمة س × ص ؟", ["32", "40", "36", "28"], 0);
+    add(2, "بكم صفراً ينتهي حاصل ضرب 1×2×3×...×20؟", ["4", "5", "6", "7"], 0);
+    add(2, "ما هو العدد التالي: 1, 1, 2, 3, 5, 8, ?", ["11", "12", "13", "14"], 2);
+    add(2, "إذا كان 5 عمال ينهون عمل خلال 6 أيام، فكم يوماً يحتاج 3 عمال لنفس العمل؟", ["10", "9", "8", "12"], 0);
+    add(2, "معك 100 ريال، أكلت دجاجة ونصف في يوم ونصف، كم بيضة تأكل دجاجة واحدة في يوم واحد؟", ["1", "1.5", "2", "0.75"], 0);
+    add(2, "يريد شخص شراء قلم بـ 5 ريال، ودفتر بـ 8 ريال وعلبة ألوان بـ 12 ريال. إذا كان معه 30 ريال فكم يعيد له الباقي؟", ["5", "6", "7", "8"], 0);
+    add(2, "إذا كانت مساحة دائرة = 64π ، فما محيطها؟", ["16π", "8π", "32π", "64π"], 0);
+    add(2, "ما هو أصغر عدد يقبل القسمة على 3 و 4 و 5 معاً؟", ["60", "30", "120", "90"], 0);
+    // المرحلة 3
+    add(3, "أكمل النمط: A, D, G, J, ?", ["M", "N", "L", "O"], 0);
+    add(3, "3, 9, 27, 81, ?", ["243", "162", "324", "256"], 0);
+    add(3, "إذا كانت 2 = 6 , 3 = 12 , 4 = 20 , 5 = 30 , 6 = ?", ["42", "40", "48", "36"], 0);
+    add(3, "من بين الأشكال، إذا تحول المربع إلى دائرة والمثلث إلى مربع، فماذا يتحول المستطيل؟", ["دائرة", "مثلث", "معين", "بيضاوي"], 1);
+    add(3, "ما الرقم المفقود: 12, 18, 24, ?, 36", ["30", "28", "32", "26"], 0);
+    add(3, "حل اللغز: شيء كلما أخذت منه كبر، فما هو؟", ["الحفرة", "العلم", "النار", "العمر"], 0);
+    add(3, "ترتيب الأعداد: 5,8,13,21,34,?", ["55", "47", "44", "58"], 0);
+    add(3, "قطار سرعته 90 كم/ساعة، كم مترًا يقطع في 10 ثوانٍ؟", ["250", "300", "200", "150"], 0);
+    add(3, "عددان حاصل ضربهما 36 والفرق بينهما 5، ما هما؟", ["4 و9", "6 و6", "3 و12", "2 و18"], 0);
+    add(3, "ما الكلمة التي تُقرأ من اليمين واليسار بنفس الشكل؟", ["مدينم", "خوخ", "وطن", "رادار"], 3);
+    // المرحلة 4
+    add(4, "ما الشيء الذي يكتب ولا يقرأ؟", ["القلم", "الكتاب", "الرسالة", "اللوحة"], 0);
+    add(4, "شيء تراه في الليل 3 مرات وفي النهار مرة واحدة؟", ["القمر", "النجم", "الحرف L", "الظل"], 2);
+    add(4, "كلمة إذا نطقتها كُسرت؟", ["الصمت", "السر", "الحلم", "الوعد"], 0);
+    add(4, "ما هو الحيوان الذي لا يلد ولا يبيض؟", ["الذكر", "الضفدع", "الحوت", "الخفاش"], 0);
+    add(4, "ما هو الشيء الذي كلما زاد نقص؟", ["العمر", "الرمل", "الثقب", "المال"], 0);
+    add(4, "يتحرك بلا أرجل ويسمع بلا أذنين فما هو؟", ["الصوت", "الريح", "البرق", "الهاتف"], 0);
+    add(4, "إذا أكلت فأنت تموت، وإذا شربت فأنت تعيش؟", ["النار", "السم", "الجمر", "الثلج"], 0);
+    add(4, "ما هو الشيء الذي تراه ولا تستطيع لمسه، وأول حروفه شيء آخر؟", ["السراب", "السماء", "الضوء", "النجم"], 2);
+    add(4, "مفتاح لكنه لا يفتح باباً؟", ["الموسيقى", "الكهربائي", "الحل", "العقل"], 0);
+    add(4, "شيء له أوراق ولكنه ليس بشجرة؟", ["الكتاب", "البصل", "الوردة", "البطاقة"], 0);
+    // المرحلة 5
+    add(5, "إذا بدأ الحفل 8:15 واستمر 3 س و45 د، متى ينتهي؟", ["12:00", "11:45", "12:15", "11:30"], 0);
+    add(5, "في سباق إذا تجاوزت الثاني ماذا تصبح؟", ["الأول", "الثاني", "الثالث", "الأخير"], 1);
+    add(5, "معك 3 تفاحات أخذت اثنتين، كم معك؟", ["2", "3", "1", "0"], 0);
+    add(5, "بئر 10م، حشرة تصعد 3م وتنزل 2م يومياً، بعد كم يوم تخرج؟", ["8", "9", "10", "7"], 0);
+    add(5, "شهر إن حذفت أوله أصبح فاكهة؟", ["تموز", "أغسطس", "شباط", "آذار"], 0);
+    add(5, "أي كلمة لا تشبه الأخرى: سيارة - طائرة - قطار - سفينة", ["طائرة", "سفينة", "قطار", "لا فرق"], 3);
+    add(5, "أكمل: 100,81,64,49,?", ["36", "25", "32", "45"], 0);
+    add(5, "إذا كان 2+2=44 ، 3+3=69 ، 4+4=816 ، فما 5+5?", ["1025", "255", "125", "1510"], 0);
+    add(5, "كم يومًا في 4 أسابيع و3 أيام؟", ["31", "30", "28", "29"], 0);
+    add(5, "تفاحة+برتقال=480 ، تفاحة+موز=450 ، برتقال+موز=390 ، وزن التفاحة؟", ["270", "250", "210", "300"], 0);
+    // المرحلة 6
+    add(6, "عدد إذا قسمته على 4 وأضفت 3 أصبح 9؟", ["24", "20", "16", "28"], 0);
+    add(6, "متوسط 5 أعداد =12، أضفنا سادساً فأصبح 14، فالعدد السادس؟", ["24", "18", "20", "22"], 0);
+    add(6, "5س -7 = 3س+11 ، س=؟", ["9", "8", "10", "12"], 0);
+    add(6, "مكعب طول حرفه 3 سم، حجمه؟", ["27سم³", "9سم³", "18سم³", "36سم³"], 0);
+    add(6, "10 طلاب يحلون 10 مسائل في 10 دقائق، كم دقيقة يحتاج 100 طالب لـ100 مسألة؟", ["10", "100", "20", "50"], 0);
+    add(6, "لتر ماء كم مليلتر؟", ["1000", "100", "500", "2000"], 0);
+    add(6, "رجل ينفق نصف راتبه إيجاراً ونصف الباقي طعاماً ويتبقى 1000، راتبه؟", ["4000", "3000", "5000", "6000"], 0);
+    add(6, "2,6,12,20,30,?", ["42", "44", "36", "40"], 0);
+    add(6, "قطار 200م يعبر جسر 800م في 40 ثانية، سرعته م/ث؟", ["25", "20", "30", "35"], 0);
+    add(6, "الساعة 7:20، الزاوية الصغرى بين العقارب؟", ["100°", "110°", "90°", "120°"], 0);
+    // المرحلة 7
+    add(7, "مكعب ناقص حرف أصبح شيئاً تشربه؟", ["كأس", "لبن", "عصير", "قهوة"], 0);
+    add(7, "تستخدمه ليقطع لكنه لا يقطع؟", ["المقص", "السكين", "الحبر", "اللسان"], 3);
+    add(7, "في سباق تجاوزت الأخير، فبأي مركز أنت؟", ["الأخير", "قبل الأخير", "الأول", "الثاني"], 0);
+    add(7, "شيء يخصك لكن الآخرين يستخدمونه أكثر؟", ["اسمك", "سرك", "عقلك", "وقتك"], 0);
+    add(7, "يقرصك دون ألم؟", ["الجوع", "الحب", "البرد", "الخوف"], 2);
+    add(7, "عدد مكون من رقمين يساوي 3 أمثال مجموع رقميه؟", ["27", "24", "21", "18"], 0);
+    add(7, "أي كسر أكبر: 3/4 أم 5/7؟", ["3/4", "5/7", "متساويان", "لا يمكن"], 0);
+    add(7, "لديك دلو 5 لتر و3 لتر، كيف تحصل على 4 لتر؟", ["املأ5 انقل لـ3 يتبقى2...", "املأ3 وانقل لـ5...", "استخدم 5 و3 مرتين", "مستحيل"], 0);
+    add(7, "أي رقم لا ينتمي: 16,25,36,49,64,81", ["16", "36", "49", "64"], 0);
+    add(7, "من 1 إلى 100 كم مرة يظهر الرقم 9؟", ["20", "19", "21", "18"], 0);
+    // المرحلة 8
+    add(8, "ليس بإنسان ولا حيوان وله 4 أرجل ولا يمشي؟", ["الكرسي", "الطاولة", "السرير", "كل ما سبق"], 3);
+    add(8, "كلما زاد سخونة كلما زاد برودة؟", ["الثلاجة", "المكيف", "الثلج", "لا شيء"], 2);
+    add(8, "8+2=16106, 5+4=2091, 9+3=36129, 7+2=?", ["49145", "54149", "45149", "35147"], 0);
+    add(8, "رقم اضربه ×3 +4 ثم ÷2 =11، فما هو؟", ["6", "8", "5", "7"], 0);
+    add(8, "عدد أضلاع منشور ثلاثي؟", ["9", "6", "5", "8"], 0);
+    add(8, "أرض مربعة طول ضلعها 40م، كم متر سياج؟", ["160", "120", "200", "80"], 0);
+    add(8, "ما هو 8% من 250؟", ["20", "25", "30", "15"], 0);
+    add(8, "5 رجال 8 ساعات يومياً ينهون مشروعاً في 10 أيام، كم يوماً يحتاج 10 رجال يعملون 4 ساعات؟", ["10", "8", "12", "5"], 0);
+    add(8, "يبدأ رمضان برؤية ...", ["الهلال", "الشمس", "النجم", "الكسوف"], 0);
+    add(8, "بلد عربي يطل على البحرين المتوسط والأحمر؟", ["مصر", "السعودية", "السودان", "اليمن"], 0);
+    // المرحلة 9
+    add(9, "1,4,27,256,?", ["3125", "1024", "625", "1296"], 0);
+    add(9, "إذا كان 1=5 , 2=25 , 3=125 , 4=625 , 5=?", ["1", "3125", "625", "5"], 0);
+    add(9, "كم حرفاً في الأبجدية العربية؟", ["28", "29", "30", "31"], 0);
+    add(9, "موجود في الدقيقة مرتين وفي القرن مرة؟", ["حرف القاف", "حرف الدال", "حرف النون", "حرف الراء"], 0);
+    add(9, "(4×(3+2)) - (6÷2) +5 = ?", ["25", "22", "20", "18"], 1);
+    add(9, "أب عمره 45 وابنه 15، بعد كم سنة يصبح الأب ضعف الابن؟", ["15", "10", "20", "5"], 0);
+    add(9, "القاهرة : مصر :: الرياض : ?", ["السعودية", "الإمارات", "الكويت", "قطر"], 0);
+    add(9, "الرقم الروماني 99 هو؟", ["XCIX", "IC", "LXLIX", "XCVIII"], 0);
+    add(9, "عدد أولي بين 50 و60؟", ["53", "51", "57", "59"], 0);
+    add(9, "مربع طول قطره 10 سم، مساحته؟", ["50سم²", "100سم²", "25سم²", "200سم²"], 0);
+    // المرحلة 10
+    add(10, "كلمة إن حذفت أولها أصبح نباتاً، وإن حذفت آخرها أصبح مدينة؟", ["مرج", "بئر", "نهر", "بحر"], 0);
+    add(10, "5×5=25 ,6×6=36 ,7×7=49 ,8×8=64 ,9×9=81 ,10×10=?", ["100", "90", "110", "121"], 0);
+    add(10, "الرقم المختلف: 161,256,289,324,400", ["161", "256", "289", "400"], 0);
+    add(10, "مضلع له 9 أقطار، كم عدد أضلاعه؟", ["6", "7", "8", "5"], 0);
+    add(10, "اليوم الأربعاء، بعد 100 يوم يكون؟", ["الجمعة", "السبت", "الأحد", "الخميس"], 0);
+    add(10, "عدد الأصفار في 25! (مضروب 25) ؟", ["6", "5", "7", "4"], 0);
+    add(10, "60 كم/ساعة كم م/ث؟", ["16.67", "20", "18", "15"], 0);
+    add(10, "عمر محمد يساوي عمر أخته قبل 3 سنوات، وبعد 5 سنوات يصبح ضعفها، عمره الآن؟", ["13", "11", "14", "10"], 0);
+    add(10, "جذر256 + جذر169 = ?", ["29", "27", "31", "25"], 0);
+    add(10, "3,8,15,24,?", ["35", "33", "34", "36"], 0);
+    
+    console.log("إجمالي الأسئلة:", QUESTIONS.length); // يجب أن تكون 100
+
+    // ---------- منطق اللعبة ----------
+    let currentLevel = 1, currentIndex = 0, selectedAnswer = null;
+    let userAnswers = {};
+    for (let i = 1; i <= 10; i++) { userAnswers[i] = new Array(10).fill(null); }
+    
+    function getLevelQuestions() { return QUESTIONS.filter(q => q.level === currentLevel); }
+    
+    function renderQuiz() {
+        const levelQs = getLevelQuestions();
+        if (!levelQs.length) return;
+        const q = levelQs[currentIndex];
+        const saved = userAnswers[currentLevel][currentIndex];
+        selectedAnswer = (saved !== null) ? saved : null;
+        let optsHtml = '';
+        const letters = ['أ', 'ب', 'ج', 'د'];
+        q.options.forEach((opt, idx) => {
+            const isSelected = (selectedAnswer === idx);
+            optsHtml += `<div class="option ${isSelected ? 'selected' : ''}" data-opt="${idx}">
+                            <span class="option-letter">${letters[idx]}</span>
+                            <span>${opt}</span>
+                         </div>`;
+        });
+        document.getElementById('app').innerHTML = `
+            <div class="quiz-header">
+                <div class="level-badge">🧠 المرحلة ${currentLevel} / 10</div>
+                <div class="question-counter">السؤال ${currentIndex+1} / 10</div>
+            </div>
+            <div class="card">
+                <div class="question-text">${q.text}</div>
+                <div class="options-list" id="optionsContainer">${optsHtml}</div>
+            </div>
+            <div class="action-buttons">
+                <button class="reset-btn" id="resetExam">⟳ إعادة الاختبار</button>
+                <button class="next-btn" id="nextBtn">➡ التالي / تأكيد</button>
+            </div>
+            <footer>⭐ 10 مراحل × 10 أسئلة = 100 سؤال لاختبار الذكاء الخارق</footer>
+        `;
+        document.querySelectorAll('.option').forEach(opt => {
+            opt.addEventListener('click', (e) => {
+                const idx = parseInt(opt.dataset.opt);
+                selectOption(idx);
+            });
+        });
+        document.getElementById('nextBtn').onclick = saveAndNext;
+        document.getElementById('resetExam').onclick = resetGame;
+    }
+    
+    function selectOption(idx) {
+        selectedAnswer = idx;
+        document.querySelectorAll('.option').forEach(opt => {
+            if (parseInt(opt.dataset.opt) === idx) opt.classList.add('selected');
+            else opt.classList.remove('selected');
+        });
+    }
+    
+    function saveAndNext() {
+        if (selectedAnswer === null) { alert("⚠️ اختر إجابة أولاً!"); return; }
+        userAnswers[currentLevel][currentIndex] = selectedAnswer;
+        if (currentIndex + 1 < 10) {
+            currentIndex++;
+            selectedAnswer = userAnswers[currentLevel][currentIndex];
+            renderQuiz();
+        } else if (currentLevel < 10) {
+            currentLevel++;
+            currentIndex = 0;
+            selectedAnswer = userAnswers[currentLevel][0];
+            renderQuiz();
+        } else {
+            finishExam();
+        }
+    }
+    
+    function finishExam() {
+        let correct = 0, total = 0;
+        for (let lvl = 1; lvl <= 10; lvl++) {
+            const qs = QUESTIONS.filter(q => q.level === lvl);
+            for (let i = 0; i < qs.length; i++) {
+                total++;
+                if (userAnswers[lvl][i] !== null && userAnswers[lvl][i] === qs[i].correct) correct++;
+            }
+        }
+        const percent = (correct / total * 100).toFixed(2);
+        document.getElementById('app').innerHTML = `
+            <div class="result-area">
+                <div class="score-percent">${percent}%</div>
+                <div class="congrats">${percent >= 70 ? '🔥 عبقري خارق 🔥' : (percent >= 50 ? '🧠 ذكي جداً' : '📚 حاوِل مرة أخرى')}</div>
+                <p>✔️ الإجابات الصحيحة: ${correct} من ${total}</p>
+                <button id="restartFinal" style="background:#ff9800; margin-top:1rem;">🔄 إعادة الاختبار بالكامل</button>
+            </div>
+        `;
+        document.getElementById('restartFinal').onclick = () => resetGame();
+    }
+    
+    function resetGame() {
+        currentLevel = 1; currentIndex = 0; selectedAnswer = null;
+        for (let i = 1; i <= 10; i++) { userAnswers[i] = new Array(10).fill(null); }
+        renderQuiz();
+    }
+    
+    // شاشة الموافقة المبدئية
+    function showConsent() {
+        document.getElementById('app').innerHTML = `
+            <div class="consent-card">
+                <div class="consent-title">🧠 اختبار العبقرية</div>
+                <div class="consent-text">هذا التحدي يتكون من <strong>10 مراحل</strong>، كل مرحلة بها <strong>10 أسئلة</strong> قوية جداً (إجمالي 100 سؤال).<br>
+                هل أنت موافق على خوض الاختبار الكامل لذكائك؟</div>
+                <div class="consent-buttons">
+                    <button class="btn-accept" id="acceptBtn">✅ نعم ، أوافق</button>
+                    <button class="btn-decline" id="declineBtn">❌ لا ، أريد الخروج</button>
+                </div>
+            </div>
+        `;
+        document.getElementById('acceptBtn').onclick = () => renderQuiz();
+        document.getElementById('declineBtn').onclick = () => {
+            document.getElementById('app').innerHTML = '<div style="color:gold;text-align:center;padding:2rem">تم الإلغاء. يمكنك تحديث الصفحة للموافقة لاحقاً.</div>';
+        };
+    }
+    showConsent();
+</script>
+</body>
+</html>
+"""
+
+@app.route('/')
+def index():
+    resp = make_response(render_template_string(HTML))
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+    return resp
+
+if __name__ == '__main__':
+    app.run(host='127.0.0.1', port=5000, debug=False)
